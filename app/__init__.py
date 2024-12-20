@@ -1,0 +1,1 @@
+"""Contract Analyzer Application"""
