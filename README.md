@@ -149,7 +149,7 @@ contract_analyzer/
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/contract-analyzer.git
+git clone https://github.com/Ujwal0404/CONTRACT-ANALYZER_AGENT.git
 cd contract-analyzer
 ```
 
