@@ -32,16 +32,17 @@ class ContractAnalyzer:
             
             # Convert to ClauseAnalysis objects
             clauses = []
-            for clause in raw_clauses:
+            for id, clause in enumerate(raw_clauses):
+                # print(clause)
                 clause_model = ClauseAnalysis(
-                    id=clause["id"],
+                    id= clause["id"],
                     text=clause["text"],
                     primary_category=clause["primary_category"],
                     secondary_categories=clause["secondary_categories"],
                     obligations=clause["obligations"],
                     deadlines=clause["deadlines"],
                     compliance_risks=clause["compliance_risks"],
-                    risk_score=5.0
+                    risk_score=float(clause["risk_score"])#5.0
                 )
                 clauses.append(clause_model)
             
@@ -58,7 +59,8 @@ class ContractAnalyzer:
                             "secondary_categories": clause.secondary_categories,
                             "obligations": clause.obligations,
                             "deadlines": clause.deadlines,
-                            "compliance_risks": clause.compliance_risks
+                            "compliance_risks": clause.compliance_risks,
+                            "risk_score": clause.risk_score
                         }
                         
                         reg_result = await self.compliance_analyzer.analyze_compliance(

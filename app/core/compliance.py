@@ -17,6 +17,27 @@ class ComplianceAnalyzer:
 
     def setup_prompts(self):
         """Set up the prompts for the analysis."""
+#         self.extraction_prompt = """Analyze the contract below and extract its clauses.
+
+# Output Format:
+# {
+#     "clauses": [
+#         {
+#             "text": "The actual clause text",
+#             "primary_category": "choose from categories below",
+#             "secondary_categories": ["array", "of", "categories"],
+#             "obligations": ["list", "of", "obligations"],
+#             "deadlines": ["list", "of", "deadlines"],
+#             "compliance_risks": ["list", "of", "risks"],
+#             "risk_score": int # Integer value between 0-5, where 0 is lowest risk and 5 is highest risk
+#         }
+#     ]
+# }
+
+# Categories: data_privacy, security, liability, termination, payment, confidentiality, intellectual_property, compliance, force_majeure, dispute_resolution
+
+# Contract:
+# {text}"""
         self.extraction_prompt = """Analyze the contract below and extract its clauses.
 
 Output Format:
@@ -29,6 +50,7 @@ Output Format:
             "obligations": ["list", "of", "obligations"],
             "deadlines": ["list", "of", "deadlines"],
             "compliance_risks": ["list", "of", "risks"]
+            "risk_score": int # Integer value between 0-5, where 0 is lowest risk and 5 is highest risk
         }
     ]
 }
@@ -59,6 +81,7 @@ Analyze considering:
 3. The accuracy of identified risks
 4. Specific {regulation} requirements
 5. Deadlines and timing requirements
+6. risk_level will be decided based on risk_score: {risk_score}
 
 Provide your analysis in this exact JSON format:
 {{
@@ -78,7 +101,7 @@ Provide your analysis in this exact JSON format:
     ]
 }}
 
-Return ONLY the JSON object. Use only "high", "medium", or "low" for risk_level."""
+Return ONLY the JSON object. Use only "high" if risk_score is 5, "medium" if risk_score is 3 or 4, or "low" if risk_score is less than 3 for risk_level."""
 
 
     @lru_cache(maxsize=100)
@@ -99,6 +122,7 @@ Return ONLY the JSON object. Use only "high", "medium", or "low" for risk_level.
             response = await self.llm.generate(
                 self.extraction_prompt + contract_text
             )
+            print(response,"##############################")
             
             if not response:
                 raise ComplianceError("Empty response from LLM")
@@ -164,7 +188,8 @@ Return ONLY the JSON object. Use only "high", "medium", or "low" for risk_level.
                 secondary_categories=", ".join(clause.get("secondary_categories", [])),
                 obligations="\n".join(f"- {o}" for o in clause.get("obligations", [])),
                 deadlines="\n".join(f"- {d}" for d in clause.get("deadlines", [])),
-                compliance_risks="\n".join(f"- {r}" for r in clause.get("compliance_risks", []))
+                compliance_risks="\n".join(f"- {r}" for r in clause.get("compliance_risks", [])),
+                risk_score = clause["risk_score"]
             )
             
             response = await self.llm.generate(formatted_prompt)
@@ -188,40 +213,108 @@ Return ONLY the JSON object. Use only "high", "medium", or "low" for risk_level.
             logger.error(f"Regulation analysis failed for {regulation.value}: {str(e)}")
             return self._get_default_result()
 
-    # async def analyze_compliance(
-    #     self,
-    #     clause: Dict[str, str],
-    #     regulations: List[RegulationType]
-    # ) -> Dict[str, Any]:
-    #     """Analyze clause compliance against multiple regulations."""
+    # def _clean_json_response(self, response: str) -> Optional[str]:
+    #     """Clean and extract JSON from response."""
+    #     if not response or not isinstance(response, str):
+    #         return None
+
     #     try:
-    #         # Cache key for compliance results
-    #         cache_key = f"{self._get_clause_hash(clause['text'])}_{','.join(sorted([r.value for r in regulations]))}"
+    #         # Remove any non-printable characters while preserving numbers and quotes
+    #         response = ''.join(char for char in response if char.isprintable() or char in ['\n', '\r', '\t'])
             
-    #         # Check cache
-    #         if cache_key in self._clause_cache:
-    #             return self._clause_cache[cache_key]
+    #         # Handle numeric values carefully
+    #         response = re.sub(r'(\d+)\s*,', r'\1,', response)
+    #         response = re.sub(r':\s*(\d+)', r':\1', response)
+            
+    #         # Try to find JSON structure
+    #         json_match = re.search(r'\{[\s\S]*\}', response)
+    #         if json_match and '"clauses"' in json_match.group(0):
+    #             return json_match.group(0)
 
-    #         results = {}
-    #         for regulation in regulations:
-    #             try:
-    #                 logger.debug(f"Analyzing {regulation.value} compliance")
-    #                 results[regulation.value] = await self._analyze_single_regulation(
-    #                     clause["text"],
-    #                     regulation
-    #                 )
-    #             except Exception as e:
-    #                 logger.error(f"Failed to analyze {regulation.value}: {str(e)}")
-    #                 results[regulation.value] = self._get_default_result()
+    #         # Try finding array structure
+    #         array_match = re.search(r'\[([\s\S]*)\]', response)
+    #         if array_match:
+    #             return f'{{"clauses": {array_match.group(0)}}}'
 
-    #         # Cache results
-    #         self._clause_cache[cache_key] = results
-    #         return results
+    #         return None
 
     #     except Exception as e:
-    #         logger.error(f"Compliance analysis failed: {str(e)}")
-    #         return {reg.value: self._get_default_result() for reg in regulations}
+    #         logger.error(f"JSON cleaning failed: {str(e)}")
+    #         return None
 
+    # def _parse_json_with_fallbacks(self, json_str: str) -> Optional[Dict]:
+    #     """Parse JSON with multiple fallback attempts."""
+    #     try:
+    #         # First attempt: direct parsing
+    #         try:
+    #             return json.loads(json_str)
+    #         except json.JSONDecodeError:
+    #             logger.debug("Direct JSON parsing failed, trying cleanup")
+
+    #         # Second attempt: clean and retry
+    #         cleaned = json_str.replace('\n', ' ').replace('\r', '')
+    #         cleaned = re.sub(r'"\s*:\s*"', '": "', cleaned)
+    #         cleaned = re.sub(r'"\s*:\s*\[', '": [', cleaned)
+    #         cleaned = re.sub(r'\]\s*,\s*"', '], "', cleaned)
+    #         cleaned = re.sub(r':\s*(\d+)(,|\s|})', r':\1\2', cleaned)  # Preserve numeric values
+            
+    #         try:
+    #             return json.loads(cleaned)
+    #         except json.JSONDecodeError:
+    #             logger.debug("Cleaned JSON parsing failed, trying reconstruction")
+
+    #         # Third attempt: reconstruct
+    #         clauses_content = re.findall(r'\{[^{}]*\}', cleaned)
+    #         if clauses_content:
+    #             reconstructed = {"clauses": []}
+    #             for clause in clauses_content:
+    #                 try:
+    #                     clause_obj = json.loads(clause)
+    #                     if 'risk_score' in clause_obj:
+    #                         clause_obj['risk_score'] = int(clause_obj['risk_score'])
+    #                     reconstructed["clauses"].append(clause_obj)
+    #                 except:
+    #                     continue
+    #             if reconstructed["clauses"]:
+    #                 return reconstructed
+
+    #         return None
+
+    #     except Exception as e:
+    #         logger.error(f"JSON parsing failed: {str(e)}")
+    #         return None
+
+    # def _extract_clauses_from_data(self, data: Dict) -> List[Dict]:
+    #     """Extract and validate clauses from parsed data."""
+    #     try:
+    #         clauses = data.get("clauses", [])
+    #         if isinstance(clauses, dict):
+    #             clauses = [clauses]
+    #         elif not isinstance(clauses, list):
+    #             raise ValueError("Invalid clauses format")
+
+    #         valid_clauses = []
+    #         for clause in clauses:
+    #             if isinstance(clause.get('risk_score'), (str, float)):
+    #                 try:
+    #                     clause['risk_score'] = int(float(clause['risk_score']))
+    #                 except (ValueError, TypeError):
+    #                     clause['risk_score'] = 0
+                
+    #             if (isinstance(clause.get('text'), str) and 
+    #                 isinstance(clause.get('primary_category'), str) and
+    #                 isinstance(clause.get('secondary_categories'), list) and
+    #                 isinstance(clause.get('obligations'), list) and
+    #                 isinstance(clause.get('deadlines'), list) and
+    #                 isinstance(clause.get('compliance_risks'), list) and
+    #                 isinstance(clause.get('risk_score'), int)):
+    #                 valid_clauses.append(clause)
+
+    #         return valid_clauses
+
+    #     except Exception as e:
+    #         logger.error(f"Clause extraction failed: {str(e)}")
+    #         return []
 
     def _clean_json_response(self, response: str) -> Optional[str]:
         """Clean and extract JSON from response."""
@@ -334,70 +427,13 @@ Return ONLY the JSON object. Use only "high", "medium", or "low" for risk_level.
                 "compliance_risks": self._process_list(
                     clause.get("compliance_risks", []),
                     self._clean_text
-                )
+                ),
+                "risk_score": clause.get("risk_score", "N/A")
             }
         except Exception as e:
             logger.warning(f"Clause processing failed: {str(e)}")
             return None
 
-    # async def analyze_compliance(
-    #     self,
-    #     clause: Dict[str, str],
-    #     regulations: List[RegulationType]
-    # ) -> Dict[str, Any]:
-    #     """Analyze clause compliance against multiple regulations."""
-    #     try:
-    #         results = {}
-    #         for regulation in regulations:
-    #             try:
-    #                 logger.debug(f"Analyzing {regulation.value} compliance")
-    #                 results[regulation.value] = await self._analyze_single_regulation(
-    #                     clause["text"],
-    #                     regulation
-    #                 )
-    #             except Exception as e:
-    #                 logger.error(f"Failed to analyze {regulation.value}: {str(e)}")
-    #                 results[regulation.value] = self._get_default_result()
-
-    #         return results
-
-    #     except Exception as e:
-    #         logger.error(f"Compliance analysis failed: {str(e)}")
-    #         return {reg.value: self._get_default_result() for reg in regulations}
-
-    # async def _analyze_single_regulation(
-    #     self,
-    #     clause_text: str,
-    #     regulation: RegulationType
-    # ) -> Dict[str, Any]:
-    #     """Analyze compliance against a single regulation."""
-    #     try:
-    #         prompt = self.compliance_prompt.format(
-    #             regulation=regulation.value,
-    #             clause=clause_text
-    #         )
-    #         print(prompt, "COMPLIANCE PROMPT")
-            
-    #         response = await self.llm.generate(prompt)
-    #         cleaned_response = self._extract_json_from_response(response)
-            
-    #         if not cleaned_response:
-    #             raise ValueError("No valid JSON found in response")
-
-    #         result = json.loads(cleaned_response)
-            
-    #         return {
-    #             "compliant": bool(result.get("compliant", False)),
-    #             "requirements_met": result.get("requirements_met", []),
-    #             "requirements_missing": result.get("requirements_missing", []),
-    #             "risk_level": self._validate_risk_level(result.get("risk_level", "high")),
-    #             "findings": result.get("findings", []),
-    #             "recommendations": result.get("recommendations", [])
-    #         }
-
-    #     except Exception as e:
-    #         logger.error(f"Regulation analysis failed for {regulation.value}: {str(e)}")
-    #         return self._get_default_result()
 
     def _clean_text(self, text: str) -> str:
         """Clean and normalize text."""
