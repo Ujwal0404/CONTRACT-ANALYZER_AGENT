@@ -83,15 +83,45 @@ results = response.json()
     "file_name": "contract.pdf",
     "analysis_timestamp": "2024-12-19T20:38:18.491735",
     "regulations": ["gdpr"],
-    "clauses": [...],
-    "compliance_results": {...},
-    "summary": {
-        "total_clauses": 5,
-        "analyzed_regulations": ["gdpr"],
-        "timestamp": "2024-12-19T20:38:18.491735",
-        "compliance_metrics": {...},
-        "risk_assessment": {...},
-        "key_issues": [...]
+    "clauses": [
+        {
+            "id": "2fbb127f-9d8a-4c4d-9c0e-c348d7a9dc79",
+            "text": "Data Protection Laws and Compliance",
+            "primary_category": "compliance",
+            "secondary_categories": ["data_privacy"],
+            "obligations": [
+                "Controller must comply with EU Directive 95/46/EC and GDPR",
+                "Controller must ensure its Instructions comply with all laws"
+            ],
+            "deadlines": ["Ongoing"],
+            "compliance_risks": [
+                "Failure to comply with Data Protection Laws may result in fines"
+            ],
+            "risk_score": 5
+        }
+    ],
+    "compliance_results": {
+        "2fbb127f-9d8a-4c4d-9c0e-c348d7a9dc79": {
+            "gdpr": {
+                "compliant": false,
+                "requirements_met": [
+                    "Data subject rights are mentioned"
+                ],
+                "requirements_missing": [
+                    "Consent mechanism is not specified",
+                    "Data retention period is not defined"
+                ],
+                "risk_level": "high",
+                "findings": [
+                    "Lack of data protection officer (DPO) designation",
+                    "No mention of data breach notification procedures"
+                ],
+                "recommendations": [
+                    "Designate a DPO and establish notification plan",
+                    "Implement consent mechanism and retention periods"
+                ]
+            }
+        }
     }
 }
 ```
@@ -149,7 +179,7 @@ contract_analyzer/
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/Ujwal0404/CONTRACT-ANALYZER_AGENT.git
+git clone https://github.com/yourusername/contract-analyzer.git
 cd contract-analyzer
 ```
 

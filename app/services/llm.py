@@ -15,7 +15,7 @@ class LLMService:
         try:
             self.llm = ChatGroq(
                 api_key=api_key,
-                model_name="llama-3.1-8b-instant",#self.model_name,
+                model_name="llama-3.1-8b-instant", #"llama-3.1-8b-instant",#self.model_name,
                 temperature=0,
                 max_tokens=4096,
                 streaming=False
